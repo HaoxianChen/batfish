@@ -1282,6 +1282,11 @@ public class PropertyChecker {
     }
   }
 
+  /*
+   * Added by hxc on 2025-03-27
+   * Purpose: Dump all simplified assertions and their variable declarations from a Z3 Solver
+   * object into an SMT-LIB2 file, with minimal instrumentation to existing code.
+   */
   private static class DumpSolver {
     public static void dumpSolverToSMT2(Context ctx, Solver solver, String filePath) throws IOException {
       try (FileWriter writer = new FileWriter(filePath)) {
