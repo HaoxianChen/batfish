@@ -6,6 +6,8 @@ import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;
 import com.microsoft.z3.Model;
+import com.microsoft.z3.Solver;
+import com.microsoft.z3.Sort;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -61,6 +63,8 @@ import org.batfish.minesweeper.utils.PathRegexes;
 import org.batfish.minesweeper.utils.PatternUtils;
 import org.batfish.minesweeper.utils.TriFunction;
 import org.batfish.minesweeper.utils.Tuple;
+import java.io.*;
+import java.util.*;
 
 /**
  * A collection of functions to check if various properties hold in the network. The general idea is
@@ -495,6 +499,13 @@ public class PropertyChecker {
 
                 addLinkFailureConstraints(enc, destPorts, failOptions);
                 addNodeFailureConstraints(enc, failNodeOptions);
+
+                /** hxc: dump the encoding to file. */
+                try {
+                  DumpSolver.dumpSolverToSMT2(enc.getCtx(), enc.getSolver(), "/tmp/encoding.smt2");
+                } catch (IOException e) {
+                  throw new RuntimeException(e);
+                }
 
                 Tuple<VerificationResult, Model> tup = enc.verify();
                 VerificationResult res = tup.getFirst();
@@ -1268,6 +1279,41 @@ public class PropertyChecker {
 
     Map<String, BoolExpr> getPropDiff() {
       return _propDiff;
+    }
+  }
+
+  private static class DumpSolver {
+    public static void dumpSolverToSMT2(Context ctx, Solver solver, String filePath) throws IOException {
+      try (FileWriter writer = new FileWriter(filePath)) {
+        writer.write("(set-logic ALL)\n");
+
+        // 1. Collect and declare variables
+        Set<Expr> symbols = new LinkedHashSet<>();
+        for (BoolExpr e : solver.getAssertions()) {
+          collectSymbols(e, symbols);
+        }
+        for (Expr s : symbols) {
+          Sort sort = s.getSort();
+          writer.write("(declare-fun " + s + " () " + sort + ")\n");
+        }
+
+        // 2. Simplify and assert formulas
+        for (BoolExpr e : solver.getAssertions()) {
+          BoolExpr simplified = (BoolExpr) e.simplify();
+          writer.write("(assert " + simplified + ")\n");
+        }
+
+        writer.write("(check-sat)\n");
+      }
+    }
+
+    private static void collectSymbols(Expr expr, Set<Expr> symbols) {
+      if (expr.isConst() && expr.getNumArgs() == 0) {
+        symbols.add(expr);
+      }
+      for (int i = 0; i < expr.getNumArgs(); i++) {
+        collectSymbols(expr.getArgs()[i], symbols);
+      }
     }
   }
 }
